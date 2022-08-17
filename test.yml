@@ -2,7 +2,7 @@ name: Mistplay Staging CD
 
 on:
     release:
-        types: [published]
+        types: [created]
             
 
 jobs:
