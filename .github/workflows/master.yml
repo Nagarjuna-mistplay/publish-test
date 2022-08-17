@@ -1,0 +1,363 @@
+name: Mistplay Staging CD
+
+on:
+    push:
+        branches:
+            - "main"
+            
+
+jobs:
+    pre-deploy:
+        runs-on: ubuntu-latest
+
+        strategy:
+            matrix:
+                node-version: [14.18.2]
+
+        steps:
+            - name: Cancel previous runs
+              uses: styfle/cancel-workflow-action@0.6.0
+              with:
+                  access_token: ${{ github.token }}
+
+            - name: Checkout
+              uses: actions/checkout@v2
+              with:
+                  fetch-depth: 0
+
+            - name: Use Node.js ${{ matrix.node-version }}
+              uses: actions/setup-node@v2
+              with:
+                  node-version: ${{ matrix.node-version }}
+
+            - name: Install npm packages
+              run: |
+                  npm ci
+
+            - name: Build latest versions of the apps
+              run: npm run many -- --target=build --projects=mistplay,mistplay-worker,chat-microservice,fetch-games-microservice,postback-microservice,reporting-microservice --configuration=production --parallel --maxParallel=7
+
+            - name: Upload app artifacts
+              uses: actions/upload-artifact@v2
+              with:
+                  name: app-artifacts
+                  path: |
+                      dist/apps/
+                      Procfiles
+                      .npmrc
+                      package.json
+                      package-lock.json
+                      config.json
+                      libs/tools/src/lib/maxmind/GeoIP2-Anonymous-IP-fallback.mmdb
+                      custom.env
+                      .ebextensions
+
+    deploy-fetch-games-microservice:
+        needs: pre-deploy
+        runs-on: ubuntu-latest
+
+        strategy:
+            matrix:
+                node-version: [14.18.2]
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v2
+              with:
+                  fetch-depth: 0
+
+            - name: Use Node.js ${{ matrix.node-version }}
+              uses: actions/setup-node@v2
+              with:
+                  node-version: ${{ matrix.node-version }}
+
+            - name: Download app artifact built with nx
+              uses: actions/download-artifact@v2
+              with:
+                  name: app-artifacts
+
+            - name: Configure AWS Credentials
+              uses: aws-actions/configure-aws-credentials@v1
+              with:
+                  aws-access-key-id: ${{ secrets.AWS_DEPLOY_ACCESS_KEY_ID }}
+                  aws-secret-access-key: ${{ secrets.AWS_DEPLOY_SECRET_ACCESS_KEY }}
+                  aws-region: ${{ secrets.AWS_DEPLOY_REGION }}
+
+            - name: Deploy fetch games microservice to staging environment, if necessary
+              uses: ./.github/actions/deploy-staging
+              with:
+                  app-name: fetch-games-microservice
+                  cname: fetch-games-stage
+                  deploy-branch: main
+                  min-scale: 150
+                  max-scale: 300
+
+    deploy-postback-microservice:
+        needs: pre-deploy
+        runs-on: ubuntu-latest
+
+        strategy:
+            matrix:
+                node-version: [14.18.2]
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v2
+              with:
+                  fetch-depth: 0
+
+            - name: Use Node.js ${{ matrix.node-version }}
+              uses: actions/setup-node@v2
+              with:
+                  node-version: ${{ matrix.node-version }}
+
+            - name: Download app artifact built with nx
+              uses: actions/download-artifact@v2
+              with:
+                  name: app-artifacts
+
+            - name: Configure AWS Credentials
+              uses: aws-actions/configure-aws-credentials@v1
+              with:
+                  aws-access-key-id: ${{ secrets.AWS_DEPLOY_ACCESS_KEY_ID }}
+                  aws-secret-access-key: ${{ secrets.AWS_DEPLOY_SECRET_ACCESS_KEY }}
+                  aws-region: ${{ secrets.AWS_DEPLOY_REGION }}
+
+            - name: Deploy postback microservice to staging environment, if necessary
+              uses: ./.github/actions/deploy-staging
+              with:
+                  app-name: postback-microservice
+                  cname: secure-postback-stage
+                  deploy-branch: main
+                  min-scale: 15
+                  max-scale: 60
+
+    deploy-reporting-microservice:
+        needs: pre-deploy
+        runs-on: ubuntu-latest
+
+        strategy:
+            matrix:
+                node-version: [14.18.2]
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v2
+              with:
+                  fetch-depth: 0
+
+            - name: Use Node.js ${{ matrix.node-version }}
+              uses: actions/setup-node@v2
+              with:
+                  node-version: ${{ matrix.node-version }}
+
+            - name: Download app artifact built with nx
+              uses: actions/download-artifact@v2
+              with:
+                  name: app-artifacts
+
+            - name: Configure AWS Credentials
+              uses: aws-actions/configure-aws-credentials@v1
+              with:
+                  aws-access-key-id: ${{ secrets.AWS_DEPLOY_ACCESS_KEY_ID }}
+                  aws-secret-access-key: ${{ secrets.AWS_DEPLOY_SECRET_ACCESS_KEY }}
+                  aws-region: ${{ secrets.AWS_DEPLOY_REGION }}
+
+            - name: Deploy reporting microservice to staging environment, if necessary
+              uses: ./.github/actions/deploy-staging
+              with:
+                  app-name: reporting-microservice
+                  cname: secure-reporting-stage
+                  deploy-branch: main
+                  min-scale: 2
+                  max-scale: 5
+
+    deploy-chat-microservice:
+        needs: pre-deploy
+        runs-on: ubuntu-latest
+
+        strategy:
+            matrix:
+                node-version: [14.18.2]
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v2
+              with:
+                  fetch-depth: 0
+
+            - name: Use Node.js ${{ matrix.node-version }}
+              uses: actions/setup-node@v2
+              with:
+                  node-version: ${{ matrix.node-version }}
+
+            - name: Download app artifact built with nx
+              uses: actions/download-artifact@v2
+              with:
+                  name: app-artifacts
+
+            - name: Configure AWS Credentials
+              uses: aws-actions/configure-aws-credentials@v1
+              with:
+                  aws-access-key-id: ${{ secrets.AWS_DEPLOY_ACCESS_KEY_ID }}
+                  aws-secret-access-key: ${{ secrets.AWS_DEPLOY_SECRET_ACCESS_KEY }}
+                  aws-region: ${{ secrets.AWS_DEPLOY_REGION }}
+
+            - name: Deploy chat microservice to staging environment, if necessary
+              uses: ./.github/actions/deploy-staging
+              with:
+                  app-name: chat-microservice
+                  cname: secure-chat-stage
+                  deploy-branch: main
+                  min-scale: 15
+                  max-scale: 30
+
+    deploy-worker:
+        needs: pre-deploy
+        runs-on: ubuntu-latest
+
+        strategy:
+            matrix:
+                node-version: [14.18.2]
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v2
+              with:
+                  fetch-depth: 0
+
+            - name: Use Node.js ${{ matrix.node-version }}
+              uses: actions/setup-node@v2
+              with:
+                  node-version: ${{ matrix.node-version }}
+
+            - name: Download app artifact built with nx
+              uses: actions/download-artifact@v2
+              with:
+                  name: app-artifacts
+
+            - name: Read environment variables from pre-deploy job, if they exist
+              run: cat custom.env >> $GITHUB_ENV
+              continue-on-error: true
+
+            - name: Configure AWS Credentials
+              uses: aws-actions/configure-aws-credentials@v1
+              with:
+                  aws-access-key-id: ${{ secrets.AWS_DEPLOY_ACCESS_KEY_ID }}
+                  aws-secret-access-key: ${{ secrets.AWS_DEPLOY_SECRET_ACCESS_KEY }}
+                  aws-region: ${{ secrets.AWS_DEPLOY_REGION }}
+
+            - name: Deploy rewards worker to production environment, if necessary
+              uses: ./.github/actions/deploy-staging
+              with:
+                  app-name: mistplay-worker
+                  cname: mistplay-worker-clone
+                  deploy-branch: main
+                  min-scale: 1
+                  max-scale: 1
+
+            - name: Deploy offers worker to production environment, if necessary
+              uses: ./.github/actions/deploy-staging
+              with:
+                  app-name: mistplay-worker
+                  cname: offers-mistplay-worker
+                  deploy-branch: main
+                  min-scale: 1
+                  max-scale: 1
+
+            - name: Deploy misc worker to production environment, if necessary
+              uses: ./.github/actions/deploy-staging
+              with:
+                  app-name: mistplay-worker
+                  cname: misc-mistplay-worker
+                  deploy-branch: main
+                  min-scale: 1
+                  max-scale: 1
+
+    deploy-mistplay-app:
+        needs: pre-deploy
+        runs-on: ubuntu-latest
+
+        strategy:
+            matrix:
+                node-version: [14.18.2]
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v2
+              with:
+                  fetch-depth: 0
+
+            - name: Use Node.js ${{ matrix.node-version }}
+              uses: actions/setup-node@v2
+              with:
+                  node-version: ${{ matrix.node-version }}
+
+            - name: Download app artifact built with nx
+              uses: actions/download-artifact@v2
+              with:
+                  name: app-artifacts
+
+            - name: Read environment variables from pre-deploy job, if they exist
+              run: cat custom.env >> $GITHUB_ENV
+              continue-on-error: true
+
+            - name: Configure AWS Credentials
+              uses: aws-actions/configure-aws-credentials@v1
+              with:
+                  aws-access-key-id: ${{ secrets.AWS_DEPLOY_ACCESS_KEY_ID }}
+                  aws-secret-access-key: ${{ secrets.AWS_DEPLOY_SECRET_ACCESS_KEY }}
+                  aws-region: ${{ secrets.AWS_DEPLOY_REGION }}
+
+            - name: Deploy mistplay app to staging environment, if necessary
+              uses: ./.github/actions/deploy-staging
+              with:
+                  app-name: mistplay
+                  cname: secure-mistplay-stage
+                  deploy-branch: main
+                  min-scale: 200
+                  max-scale: 450
+
+    deploy-hex-app:
+        needs: pre-deploy
+        runs-on: ubuntu-latest
+
+        strategy:
+            matrix:
+                node-version: [14.18.2]
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v2
+              with:
+                  fetch-depth: 0
+
+            - name: Use Node.js ${{ matrix.node-version }}
+              uses: actions/setup-node@v2
+              with:
+                  node-version: ${{ matrix.node-version }}
+
+            - name: Download app artifact built with nx
+              uses: actions/download-artifact@v2
+              with:
+                  name: app-artifacts
+
+            - name: Read environment variables from pre-deploy job, if they exist
+              run: cat custom.env >> $GITHUB_ENV
+              continue-on-error: true
+
+            - name: Configure AWS Credentials
+              uses: aws-actions/configure-aws-credentials@v1
+              with:
+                  aws-access-key-id: ${{ secrets.AWS_DEPLOY_ACCESS_KEY_ID }}
+                  aws-secret-access-key: ${{ secrets.AWS_DEPLOY_SECRET_ACCESS_KEY }}
+                  aws-region: ${{ secrets.AWS_DEPLOY_REGION }}
+
+            - name: Deploy hex app to staging environment, if necessary
+              uses: ./.github/actions/deploy-staging
+              with:
+                  app-name: hex
+                  cname: hex-staging
+                  deploy-branch: main
+                  min-scale: 2
+                  max-scale: 5
